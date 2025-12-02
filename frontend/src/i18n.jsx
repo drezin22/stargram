@@ -1,3 +1,4 @@
+/* ./i18n.jsx */
 /* eslint react-refresh/only-export-components: off */
 
 import React, {

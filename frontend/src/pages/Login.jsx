@@ -1,26 +1,35 @@
 // src/pages/Login.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import "../styles/login.css";
-import { useI18n } from "../I18n"; // importa o i18n
+import { useI18n } from "../i18n";
+import { useAuth } from "../auth/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
-  const { t, lang, setLang } = useI18n(); // pega tradução + idioma
+  const { t, lang, setLang } = useI18n();
+  const { login, register, logged } = useAuth();
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
-  const [email, setEmail] = useState("");
+  const [emailOrUser, setEmailOrUser] = useState("");
+  const [userName, setUserName] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmSenha, setConfirmSenha] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Telas do mock do celular
+  // se já estiver logado, manda pro feed
+  useEffect(() => {
+    if (logged) navigate("/feed", { replace: true });
+  }, [logged, navigate]);
+
+  // telas do mock do celular
   const imagens = useMemo(
     () => ["/img/celular2.png", "/img/celular3.png"],
     []
   );
   const [index, setIndex] = useState(0);
 
-  // preload para evitar flicker
   useEffect(() => {
     imagens.forEach((src) => {
       const i = new Image();
@@ -28,7 +37,6 @@ export default function Login() {
     });
   }, [imagens]);
 
-  // cross-fade (~5.2s)
   useEffect(() => {
     const timer = setInterval(() => {
       setIndex((prev) => (prev === imagens.length - 1 ? 0 : prev + 1));
@@ -36,20 +44,32 @@ export default function Login() {
     return () => clearInterval(timer);
   }, [imagens.length]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setStatus("");
     setLoading(true);
 
-    // Por enquanto só simula…
-    setTimeout(() => {
+    try {
       if (mode === "login") {
-        setStatus(t("msg_login_demo"));      // <-- traduzido
+        await login({ login: emailOrUser, password: senha });
+        navigate("/feed");
       } else {
-        setStatus(t("msg_signup_demo"));     // <-- traduzido
+        if (senha !== confirmSenha) {
+          throw new Error("As senhas não conferem.");
+        }
+        await register({
+          email: emailOrUser,
+          userName: userName || emailOrUser.split("@")[0],
+          password: senha,
+        });
+        navigate("/feed");
       }
+    } catch (err) {
+      console.error(err);
+      setStatus(err.message || "Erro ao autenticar.");
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   }
 
   function toggleMode(e) {
@@ -91,24 +111,40 @@ export default function Login() {
             <img
               src="/img/logo.png"
               className="logo"
-              alt={t("brand")}
+              alt="Stargram"
               draggable="false"
             />
 
             <form onSubmit={handleSubmit}>
+              {/* login usa email OR user; cadastro usa email + username */}
               <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t("placeholders_user")}
-                aria-label={t("placeholders_user")}
+                value={emailOrUser}
+                onChange={(e) => setEmailOrUser(e.target.value)}
+                placeholder={
+                  mode === "login"
+                    ? t("placeholders_user") // "Telefone, nome de usuário ou e-mail"
+                    : "E-mail"
+                }
+                aria-label="Usuário ou e-mail"
                 disabled={loading}
               />
+
+              {mode === "signup" && (
+                <input
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Nome de usuário"
+                  aria-label="Nome de usuário"
+                  disabled={loading}
+                />
+              )}
+
               <input
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
                 placeholder={t("placeholders_pass")}
                 type="password"
-                aria-label={t("placeholders_pass")}
+                aria-label="Senha"
                 disabled={loading}
               />
 
@@ -116,9 +152,9 @@ export default function Login() {
                 <input
                   value={confirmSenha}
                   onChange={(e) => setConfirmSenha(e.target.value)}
-                  placeholder={t("placeholders_pass_confirm")}
+                  placeholder="Confirmar senha"
                   type="password"
-                  aria-label={t("placeholders_pass_confirm")}
+                  aria-label="Confirmar senha"
                   disabled={loading}
                 />
               )}
@@ -126,11 +162,11 @@ export default function Login() {
               <button type="submit" disabled={loading}>
                 {loading
                   ? mode === "login"
-                    ? t("btn_login_loading")
-                    : t("btn_signup_loading")
+                    ? "Entrando..."
+                    : "Criando conta..."
                   : mode === "login"
                   ? t("btn_login")
-                  : t("btn_signup")}
+                  : "Criar conta"}
               </button>
             </form>
 
@@ -139,7 +175,7 @@ export default function Login() {
               href="#"
               onClick={(e) => {
                 e.preventDefault();
-                alert("Aqui depois vamos ligar o botão do Google 😉");
+                alert("Integração com Google vem depois 😉");
               }}
             >
               {t("login_google")}
@@ -151,10 +187,10 @@ export default function Login() {
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("Depois ligamos o fluxo de 'Esqueceu a senha'.");
+                  alert("Fluxo de recuperação de senha em breve.");
                 }}
               >
-                {t("forgot")}
+                {t("forgot")}?
               </a>
             )}
 
@@ -164,7 +200,7 @@ export default function Login() {
                   textAlign: "center",
                   marginTop: 8,
                   fontSize: 12,
-                  color: "#333",
+                  color: "#c0392b",
                 }}
               >
                 {status}
@@ -183,9 +219,9 @@ export default function Login() {
               </p>
             ) : (
               <p>
-                {t("cta_have_account")}{" "}
+                Já tem uma conta?{" "}
                 <a href="#" onClick={toggleMode}>
-                  {t("btn_login")}
+                  Entrar
                 </a>
               </p>
             )}
@@ -193,7 +229,7 @@ export default function Login() {
         </div>
       </main>
 
-      {/* Rodapé */}
+      {/* Rodapé (já com i18n + seletor de idioma) */}
       <footer className="site-footer">
         <nav className="footer-links" aria-label="Links do rodapé">
           <a href="#">{t("footer.meta")}</a>

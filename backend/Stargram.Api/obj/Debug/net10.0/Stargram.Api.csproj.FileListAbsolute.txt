@@ -169,3 +169,4 @@ C:\Users\andre\OneDrive\Desktop\stargram\backend\Stargram.Api\obj\Debug\net10.0\
 C:\Users\andre\OneDrive\Desktop\stargram\backend\Stargram.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
 C:\Users\andre\OneDrive\Desktop\stargram\backend\Stargram.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\andre\OneDrive\Desktop\stargram\backend\Stargram.Api\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\andre\OneDrive\Desktop\stargram\backend\Stargram.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
