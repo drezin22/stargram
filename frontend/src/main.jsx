@@ -2,13 +2,18 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+
 import { LanguageProvider } from "./i18n.jsx";
-import "./styles/login.css"; // <- aqui é ./ mesmo, está no mesmo nível
+import { AuthProvider } from "./auth/AuthContext.jsx";
+
+import "./styles/login.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <LanguageProvider>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </LanguageProvider>
   </React.StrictMode>
 );

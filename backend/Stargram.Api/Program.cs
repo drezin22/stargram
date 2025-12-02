@@ -1,75 +1,98 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Stargram.Api.Data;
+using Stargram.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//
-// 1. CORS – permite que o frontend (Vite) acesse a API
-//
-var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
-
+// ------------------------------------------------------------
+// 1) CONFIGURAÇÃO DO CORS (permitir o frontend local)
+// ------------------------------------------------------------
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(
-        name: MyAllowSpecificOrigins,
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:5173") // endereço do Vite
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:5173")  // URL do Vite
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
 
-//
-// 2. DbContext – conexão com SQL Server
-//
-builder.Services.AddDbContext<StargramDbContext>(options =>
+// ------------------------------------------------------------
+// 2) EF CORE
+// ------------------------------------------------------------
+builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-//
-// 3. Controllers
-//
-builder.Services.AddControllers();
+// ------------------------------------------------------------
+// 3) HASHER DE SENHA
+// ------------------------------------------------------------
+builder.Services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
 
-//
-// 4. Swagger
-//
+// ------------------------------------------------------------
+// 4) JWT
+// ------------------------------------------------------------
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var key = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.RequireHttpsMetadata = false; // EM PRODUÇÃO: true
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// ------------------------------------------------------------
+// 5) CONTROLLERS + SWAGGER
+// ------------------------------------------------------------
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-//
-// 5. Ativar Swagger no ambiente de desenvolvimento
-//
+// ------------------------------------------------------------
+// 6) SWAGGER EM DEV
+// ------------------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-//
-// 6. HTTPS redirection
-//
+// ------------------------------------------------------------
+// 7) ORDEM CORRETA DOS MIDDLEWARES
+// ------------------------------------------------------------
 app.UseHttpsRedirection();
 
-//
-// 7. ATENÇÃO — ativar CORS ANTES de Authorization
-//
-app.UseCors(MyAllowSpecificOrigins);
+// ATENÇÃO: CORS SEMPRE ANTES DE AUTENTICAÇÃO
+app.UseCors("AllowFrontend");
 
-//
-// 8. Authorization (não estamos usando ainda)
-//
+app.UseAuthentication();
 app.UseAuthorization();
 
-//
-// 9. Mapear controllers (StarsController etc.)
-//
 app.MapControllers();
 
-//
-// 10. Rodar aplicação
-//
 app.Run();
