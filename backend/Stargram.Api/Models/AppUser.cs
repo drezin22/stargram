@@ -12,7 +12,7 @@ namespace Stargram.Api.Models
         public string Email { get; set; } = default!;
 
         // hash da senha, nunca guarde senha em texto puro
-        public string PasswordHash { get; set; } = default!;
+        public string? PasswordHash { get; set; } = default!;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

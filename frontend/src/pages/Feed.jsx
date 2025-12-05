@@ -154,9 +154,9 @@ function TopBar({ onLogout, user }) {
             Sair
           </button>
 
-          <Avatar
-            src={user?.photoURL || user?.avatarUrl}
-            title={user?.displayName || user?.email}
+             <Avatar
+            src={user?.avatarUrl}
+            title={user?.userName || user?.email}
             variant="sm"
           />
         </div>
@@ -206,12 +206,12 @@ function LeftNav() {
 /* ===================== Stories: carrossel c/ setas ===================== */
 function StoriesCarousel({ user }) {
   const people = useMemo(() => {
-    const base = [
-      {
-        id: "me",
-        name: user?.displayName || user?.email?.split("@")[0] || "Você",
-        img: user?.photoURL || user?.avatarUrl,
-      },
+  const base = [
+    {
+      id: "me",
+      name: user?.userName || user?.email?.split("@")[0] || "Você",
+      img: user?.avatarUrl,
+    },
       { id: 1, name: "fernanda.dev", img: `https://i.pravatar.cc/150?img=1` },
       { id: 2, name: "techshop", img: `https://i.pravatar.cc/150?img=2` },
       { id: 3, name: "fiap.on", img: `https://i.pravatar.cc/150?img=3` },
@@ -298,6 +298,7 @@ function StoriesCarousel({ user }) {
 }
 
 /* ===================== Composer (criar post) ===================== */
+/* ===================== Composer (criar post) ===================== */
 function Composer({ user, onPostCreated }) {
   const [caption, setCaption] = useState("");
   const [file, setFile] = useState(null);
@@ -318,14 +319,12 @@ function Composer({ user, onPostCreated }) {
     try {
       setBusy(true);
 
-      // 👉 Versão preparada para backend .NET:
-      // se tiver arquivo, usamos FormData; se não, mandamos só JSON.
       let createdPost;
 
       if (file) {
         const form = new FormData();
         form.append("caption", caption.trim());
-        form.append("userId", user.id || user.userId || "");
+        form.append("userId", user.id);     // 👈 usa o id do backend
         form.append("file", file);
 
         const res = await fetch(`${API_BASE_URL}/api/posts`, {
@@ -340,7 +339,7 @@ function Composer({ user, onPostCreated }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             caption: caption.trim(),
-            userId: user.id || user.userId || "",
+            userId: user.id,               // 👈 idem aqui
           }),
         });
         if (!res.ok) throw new Error("Erro ao publicar o post.");
@@ -350,7 +349,6 @@ function Composer({ user, onPostCreated }) {
       setCaption("");
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
-      // atualiza o feed localmente
       onPostCreated?.(createdPost);
     } catch (err) {
       console.error(err);
@@ -362,7 +360,8 @@ function Composer({ user, onPostCreated }) {
 
   return (
     <form className="composer" onSubmit={handlePublish}>
-      <Avatar src={user?.photoURL || user?.avatarUrl} variant="sm" />
+      {/* 👇 avatar do usuário vindo do backend */}
+      <Avatar src={user?.avatarUrl} variant="sm" />
 
       <input
         className="composer-input"
@@ -390,6 +389,7 @@ function Composer({ user, onPostCreated }) {
   );
 }
 
+
 /* ===================== Post ===================== */
 function PostCard({ post, user, onPostUpdated }) {
   const [liking, setLiking] = useState(false);
@@ -397,10 +397,12 @@ function PostCard({ post, user, onPostUpdated }) {
   const likeCount =
     post.likesCount ?? post.likedBy?.length ?? post.likeCount ?? 0;
 
-  const isLiked =
-    post.isLikedByCurrentUser ??
-    post.likedBy?.includes(user?.id || user?.userId) ??
-    false;
+const isLiked =
+  post.isLikedByCurrentUser ??
+  post.likedBy?.includes(user?.id) ??
+  false;
+
+
 
   async function toggleLike() {
     if (!user) return;
@@ -410,8 +412,9 @@ function PostCard({ post, user, onPostUpdated }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: user.id || user.userId || "",
-        }),
+  userId: user.id,
+}),
+
       });
       if (!res.ok) throw new Error("Erro ao curtir o post.");
       const updated = await res.json();
@@ -517,10 +520,11 @@ function CommentComposer({ postId, user }) {
       const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+               body: JSON.stringify({
           text: text.trim(),
-          userId: user?.id || user?.userId || "",
+          userId: user?.id,   // ✅ agora usa o id do usuário do backend
         }),
+
       });
       if (!res.ok) throw new Error("Erro ao enviar comentário.");
       // opcional: const created = await res.json();
@@ -558,17 +562,15 @@ function CommentsButton() {
 
 /* ===================== Side ===================== */
 function ProfileCard({ user }) {
+  const name = user?.userName || user?.email?.split("@")[0] || "Você";
+
   return (
     <div className="card profile">
       <div className="row">
-        <Avatar
-          src={user?.photoURL || user?.avatarUrl}
-          title={user?.displayName}
-          variant="md"
-        />
+        <Avatar src={user?.avatarUrl} title={name} variant="md" />
         <div>
-          <b>{user?.displayName || user?.email?.split("@")[0]}</b>
-          <div className="muted">Bem-vindo ao Stargram</div>
+          <b>{name}</b>
+          <div className="muted">{user?.email}</div>
         </div>
       </div>
       <button
@@ -580,6 +582,7 @@ function ProfileCard({ user }) {
     </div>
   );
 }
+
 
 function Suggestions() {
   const list = [
