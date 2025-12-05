@@ -39,9 +39,9 @@ export function AuthProvider({ children }) {
     );
   }
 
-  // 📌 Cadastro
+  // 📌 Cadastro (email + senha)
   async function register({ email, userName, password }) {
-    const res = await fetch(`${API_BASE_URL}/api/Auth/register`, {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, userName, password }),
@@ -59,13 +59,13 @@ export function AuthProvider({ children }) {
     );
   }
 
-  // 📌 Login
+  // 📌 Login normal (email / usuário + senha)
   async function login({ login, password }) {
-    const res = await fetch(`${API_BASE_URL}/api/Auth/login`, {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        emailOrUserName: login,
+        email: login, // seu backend atual valida por email
         password,
       }),
     });
@@ -80,6 +80,32 @@ export function AuthProvider({ children }) {
       { id: data.id, userName: data.userName, email: data.email },
       data.token
     );
+  }
+
+  // 📌 Login a partir de um token pronto (Google)
+  async function loginWithToken(externalToken) {
+    // Busca os dados do usuário com o token já gerado pelo backend
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${externalToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || "Erro ao carregar usuário a partir do token.");
+    }
+
+    const data = await res.json(); // { id, email, userName }
+
+    const nextUser = {
+      id: Number(data.id),
+      userName: data.userName,
+      email: data.email,
+    };
+
+    persistAuth(nextUser, externalToken);
   }
 
   // 📌 Logout
@@ -97,6 +123,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    loginWithToken, // 🔥 usado na AuthCallback.jsx
     apiBaseUrl: API_BASE_URL,
   };
 

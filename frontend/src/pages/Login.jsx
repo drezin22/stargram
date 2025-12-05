@@ -171,15 +171,17 @@ export default function Login() {
             </form>
 
             <a
-              className="login-google"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("Integração com Google vem depois 😉");
-              }}
-            >
-              {t("login_google")}
-            </a>
+               className="login-google"
+               href="#"
+               onClick={(e) => {
+               e.preventDefault();
+               window.location.href = "http://localhost:5161/auth/google/login";
+  }}
+>
+  {t("login_google")}
+</a>
+
+
 
             {mode === "login" && (
               <a
