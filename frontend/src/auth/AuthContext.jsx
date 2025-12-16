@@ -1,47 +1,96 @@
-/* eslint react-refresh/only-export-components: off */
-
-// frontend/src/auth/AuthContext.jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
-
-// 📌 URL base da API – sem /api aqui
-// Definida em frontend/.env.local como:
-// VITE_API_URL=http://localhost:5161
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5161";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const AuthContext = createContext(null);
+const API_URL = "http://localhost:5161";
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+function buildUserFromClaims(claims) {
+  if (!claims) return null;
+
+  // Esses nomes podem variar conforme seu backend gera o JWT.
+  // Coloque vários “fallbacks” para funcionar em qualquer caso.
+  const id =
+    claims.sub ||
+    claims.nameid ||
+    claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"];
+
+  const userName =
+    claims.userName ||
+    claims.unique_name ||
+    claims.name ||
+    claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"];
+
+  const email =
+    claims.email ||
+    claims.upn ||
+    claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
+
+  const avatarUrl = claims.avatarUrl || claims.picture || null;
+
+  return {
+    id: id ? Number(id) : id, // se vier string numérica, converte
+    userName,
+    email,
+    avatarUrl,
+  };
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // { id, userName, email }
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(() => localStorage.getItem("stargram_token") || "");
+  const [user, setUser] = useState(null);
 
-  // Carrega o auth salvo no localStorage ao iniciar
+  const logged = !!token;
+
   useEffect(() => {
-    const saved = localStorage.getItem("stargram_auth");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setUser(parsed.user);
-        setToken(parsed.token);
-      } catch {
-        // JSON inválido → ignora
-      }
-    }
-    setLoading(false);
-  }, []);
+    if (token) localStorage.setItem("stargram_token", token);
+    else localStorage.removeItem("stargram_token");
+  }, [token]);
 
-  function persistAuth(nextUser, nextToken) {
-    setUser(nextUser);
-    setToken(nextToken);
-    localStorage.setItem(
-      "stargram_auth",
-      JSON.stringify({ user: nextUser, token: nextToken })
-    );
+  // ✅ toda vez que token mudar, monta o user
+  useEffect(() => {
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    const claims = parseJwt(token);
+    const u = buildUserFromClaims(claims);
+    setUser(u);
+  }, [token]);
+
+  async function login({ login, password }) {
+    const res = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password }),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || "Erro ao autenticar.");
+    }
+
+    const data = await res.json(); // { token: "..." }
+    setToken(data.token);
+    return data;
   }
 
-  // 📌 Cadastro (email + senha)
   async function register({ email, userName, password }) {
-    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    const res = await fetch(`${API_URL}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, userName, password }),
@@ -52,87 +101,29 @@ export function AuthProvider({ children }) {
       throw new Error(msg || "Erro ao cadastrar.");
     }
 
-    const data = await res.json(); // { id, userName, email, token }
-    persistAuth(
-      { id: data.id, userName: data.userName, email: data.email },
-      data.token
-    );
+    const data = await res.json(); // { token: "..." }
+    if (data?.token) setToken(data.token);
+    return data;
   }
 
-  // 📌 Login normal (email / usuário + senha)
-  async function login({ login, password }) {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: login, // seu backend atual valida por email
-        password,
-      }),
-    });
-
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || "Usuário ou senha inválidos.");
-    }
-
-    const data = await res.json();
-    persistAuth(
-      { id: data.id, userName: data.userName, email: data.email },
-      data.token
-    );
+  async function loginWithToken(jwt) {
+    setToken(jwt);
+    return true;
   }
 
-  // 📌 Login a partir de um token pronto (Google)
-  async function loginWithToken(externalToken) {
-    // Busca os dados do usuário com o token já gerado pelo backend
-    const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${externalToken}`,
-      },
-    });
-
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || "Erro ao carregar usuário a partir do token.");
-    }
-
-    const data = await res.json(); // { id, email, userName }
-
-    const nextUser = {
-      id: Number(data.id),
-      userName: data.userName,
-      email: data.email,
-    };
-
-    persistAuth(nextUser, externalToken);
-  }
-
-  // 📌 Logout
   function logout() {
+    setToken("");
     setUser(null);
-    setToken(null);
-    localStorage.removeItem("stargram_auth");
   }
 
-  const value = {
-    user,
-    token,
-    loading,
-    logged: !!user && !!token,
-    login,
-    register,
-    logout,
-    loginWithToken, // 🔥 usado na AuthCallback.jsx
-    apiBaseUrl: API_BASE_URL,
-  };
+  const value = useMemo(
+    () => ({ token, user, logged, login, register, loginWithToken, logout }),
+    [token, user, logged]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx)
-    throw new Error("useAuth deve ser usado dentro de <AuthProvider />");
-  return ctx;
+  return useContext(AuthContext);
 }

@@ -1,44 +1,31 @@
-// frontend/src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Feed from "./pages/Feed";
-import AuthCallback from "./pages/AuthCallback"; // ⭐ nova página
-import { LanguageProvider } from "./i18n";
-import { AuthProvider, useAuth } from "./auth/AuthContext";
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login.jsx";
+import Feed from "./pages/Feed.jsx";
+import AuthCallback from "./pages/AuthCallback.jsx";
+import { useAuth } from "./auth/AuthContext.jsx";
 
 function PrivateRoute({ children }) {
-  const { logged, loading } = useAuth();
-  if (loading) return null; // aqui você pode colocar um spinner se quiser
-  return logged ? children : <Navigate to="/" replace />;
+  const { logged } = useAuth();
+  return logged ? children : <Navigate to="/login" replace />;
 }
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Login padrão */}
-            <Route path="/" element={<Login />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Callback do Google -> NÃO precisa estar logado */}
-            <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route
+        path="/feed"
+        element={
+          <PrivateRoute>
+            <Feed />
+          </PrivateRoute>
+        }
+      />
 
-            {/* Feed protegido */}
-            <Route
-              path="/feed"
-              element={
-                <PrivateRoute>
-                  <Feed />
-                </PrivateRoute>
-              }
-            />
-
-            {/* Qualquer rota desconhecida cai pro login */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </LanguageProvider>
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }

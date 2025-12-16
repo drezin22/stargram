@@ -1,8 +1,8 @@
-// backend/Stargram.Api/Controllers/AuthController.cs
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -11,257 +11,246 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Stargram.Api.Data;
 using Stargram.Api.Models;
-using Microsoft.AspNetCore.Authentication.Cookies;
-
 
 namespace Stargram.Api.Controllers;
 
 [ApiController]
-[Route("auth")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly IPasswordHasher<AppUser> _passwordHasher;
     private readonly IConfiguration _config;
+    private readonly AppDbContext _db;
+    private readonly IPasswordHasher<AppUser> _hasher;
 
-    public AuthController(
-        AppDbContext context,
-        IPasswordHasher<AppUser> passwordHasher,
-        IConfiguration config)
+    public AuthController(IConfiguration config, AppDbContext db, IPasswordHasher<AppUser> hasher)
     {
-        _context = context;
-        _passwordHasher = passwordHasher;
         _config = config;
+        _db = db;
+        _hasher = hasher;
     }
 
-    // --------------------------------------------------------
-    // LOGIN NORMAL (EMAIL + SENHA)
-    // POST /auth/login
-    // --------------------------------------------------------
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    // ---------------------------
+    // DTOs
+    // ---------------------------
+    public sealed class LoginRequest
     {
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
+        public string Login { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    public sealed class RegisterRequest
+    {
+        public string Email { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+
+    public sealed class AuthResponse
+    {
+        public string Token { get; set; } = "";
+    }
+
+    // ---------------------------
+    // REGISTER (normal)
+    // ---------------------------
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest req)
+    {
+        var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        var userName = (req.UserName ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+            return BadRequest("E-mail inválido.");
+
+        if (string.IsNullOrWhiteSpace(userName))
+            return BadRequest("Nome de usuário inválido.");
+
+        if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6)
+            return BadRequest("A senha deve ter pelo menos 6 caracteres.");
+
+        var emailExists = await _db.Users.AnyAsync(u => u.Email.ToLower() == email);
+        if (emailExists)
+            return BadRequest("E-mail já cadastrado.");
+
+        var userExists = await _db.Users.AnyAsync(u => u.UserName.ToLower() == userName.ToLower());
+        if (userExists)
+            return BadRequest("Nome de usuário já está em uso.");
+
+        var user = new AppUser
+        {
+            Email = email,
+            UserName = userName,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        user.PasswordHash = _hasher.HashPassword(user, req.Password);
+
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        var token = CreateJwt(user);
+        return Ok(new AuthResponse { Token = token });
+    }
+
+    // ---------------------------
+    // LOGIN (normal)
+    // ---------------------------
+    [HttpPost("login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Login([FromBody] LoginRequest req)
+    {
+        var login = (req.Login ?? "").Trim();
+        var password = req.Password ?? "";
+
+        if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
+            return BadRequest("Informe login e senha.");
+
+        // aceita email OU username
+        var user = await _db.Users.FirstOrDefaultAsync(u =>
+            u.Email.ToLower() == login.ToLower() || u.UserName.ToLower() == login.ToLower());
 
         if (user == null)
             return Unauthorized("Usuário ou senha inválidos.");
 
-        var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash!, request.Password);
+        // Se foi criado via Google e não tem senha
+        if (string.IsNullOrWhiteSpace(user.PasswordHash))
+            return Unauthorized("Essa conta foi criada via Google. Entre com Google ou defina uma senha.");
 
-        if (result == PasswordVerificationResult.Failed)
+        var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
+        if (verify == PasswordVerificationResult.Failed)
             return Unauthorized("Usuário ou senha inválidos.");
 
-        var token = GenerateToken(user);
-
-        return Ok(new AuthResponse
-        {
-            Token = token,
-            Id = user.Id,
-            UserName = user.UserName,
-            Email = user.Email
-        });
+        var token = CreateJwt(user);
+        return Ok(new AuthResponse { Token = token });
     }
 
-    // --------------------------------------------------------
-    // REGISTRO NORMAL
-    // POST /auth/register
-    // --------------------------------------------------------
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-    {
-        var exists = await _context.Users
-            .AnyAsync(u => u.Email == request.Email);
-
-        if (exists)
-            return BadRequest("Já existe um usuário com esse e-mail.");
-
-        var user = new AppUser
-        {
-            UserName = request.UserName,
-            Email = request.Email,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
-
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        var token = GenerateToken(user);
-
-        return Ok(new AuthResponse
-        {
-            Token = token,
-            Id = user.Id,
-            UserName = user.UserName,
-            Email = user.Email
-        });
-    }
-
-    // --------------------------------------------------------
-    // /auth/me  (apenas pra teste - ver usuário logado)
-    // --------------------------------------------------------
-    [HttpGet("me")]
-    [Authorize]
-    public IActionResult Me()
-    {
-        var id = User.FindFirst("id")?.Value;
-        var email = User.FindFirst(ClaimTypes.Email)?.Value;
-        var username = User.FindFirst("username")?.Value;
-
-        return Ok(new
-        {
-            Id = id,
-            Email = email,
-            UserName = username
-        });
-    }
-
-    // ========================================================
-    //          LOGIN COM GOOGLE
-    // ========================================================
-
-    // --------------------------------------------------------
-    // 1) REDIRECIONA PARA O GOOGLE
-    // GET /auth/google/login
-    // --------------------------------------------------------
+    // ---------------------------
+    // GOOGLE LOGIN
+    // ---------------------------
     [HttpGet("google/login")]
+    [AllowAnonymous]
     public IActionResult GoogleLogin()
     {
-        var redirectUrl = Url.Action("GoogleCallback", "Auth");
-        var properties = new AuthenticationProperties { RedirectUri = redirectUrl };
+        // controller callback final
+        var redirectUrl = Url.Action(nameof(GoogleCallback), "Auth", null, Request.Scheme);
 
-        return Challenge(properties, GoogleDefaults.AuthenticationScheme);
-    }
-
-    // --------------------------------------------------------
-    // 2) CALLBACK DO GOOGLE
-    // GET /auth/google/callback
-    // --------------------------------------------------------
-    [HttpGet("google/callback")]
-[AllowAnonymous]
-public async Task<IActionResult> GoogleCallback()
-{
-    // ✅ Agora lê do cookie, não do handler do Google
-    var authenticateResult = await HttpContext.AuthenticateAsync(
-        CookieAuthenticationDefaults.AuthenticationScheme
-    );
-
-    if (!authenticateResult.Succeeded || authenticateResult.Principal == null)
-        return Unauthorized("Falha ao autenticar com o Google.");
-
-    var principal = authenticateResult.Principal;
-
-    var email = principal.FindFirst(ClaimTypes.Email)?.Value;
-    var name = principal.Identity?.Name ?? email?.Split('@')[0];
-
-    if (string.IsNullOrEmpty(email))
-        return BadRequest("Não foi possível obter o e-mail do Google.");
-
-    // 1. Verifica se já existe no banco
-    var user = await _context.Users
-        .FirstOrDefaultAsync(u => u.Email == email);
-
-    // 2. Se não existir, cria automaticamente
-    if (user == null)
-    {
-        user = new AppUser
+        var props = new AuthenticationProperties
         {
-            UserName = GenerateUniqueUserName(name!),
-            Email = email,
-            PasswordHash = null,
-            CreatedAt = DateTime.UtcNow
+            RedirectUri = redirectUrl
         };
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+        return Challenge(props, GoogleDefaults.AuthenticationScheme);
     }
 
-    // 3. Gera o JWT
-    var token = GenerateToken(user);
-
-    // 4. Redireciona de volta pro frontend com o token na URL
-    var frontendUrl = "http://localhost:5173/auth/callback";
-    var redirect = $"{frontendUrl}?token={token}";
-
-    return Redirect(redirect);
-}
-
-    // --------------------------------------------------------
-    // GERA UM USERNAME ÚNICO A PARTIR DO NOME / E-MAIL
-    // --------------------------------------------------------
-    private string GenerateUniqueUserName(string baseName)
+    // ---------------------------
+    // GOOGLE CALLBACK (final)
+    // ---------------------------
+    [HttpGet("google/callback")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleCallback()
     {
-        var userName = baseName
-            .Trim()
-            .Replace(" ", ".")
-            .ToLowerInvariant();
+        var result = await HttpContext.AuthenticateAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme);
 
-        if (!_context.Users.Any(u => u.UserName == userName))
-            return userName;
+        if (!result.Succeeded || result.Principal == null)
+            return Redirect("http://localhost:5173/login");
 
-        var suffix = 1;
-        var temp = userName;
+        var principal = result.Principal;
 
-        while (_context.Users.Any(u => u.UserName == temp))
+        var email = principal.FindFirstValue(ClaimTypes.Email)?.Trim().ToLowerInvariant();
+        var name =
+            principal.FindFirstValue(ClaimTypes.Name)
+            ?? principal.Identity?.Name
+            ?? email;
+
+        if (string.IsNullOrWhiteSpace(email))
+            return Redirect("http://localhost:5173/login");
+
+        // cria ou pega usuário no banco
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+
+        if (user == null)
         {
-            suffix++;
-            temp = $"{userName}{suffix}";
+            var baseUserName = (name ?? email).Split('@')[0];
+            var uniqueUserName = await GenerateUniqueUserName(baseUserName);
+
+            user = new AppUser
+            {
+                Email = email,
+                UserName = uniqueUserName,
+                PasswordHash = null, // conta google
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
         }
 
-        return temp;
+        var token = CreateJwt(user);
+
+        // limpa cookie externo
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+        return Redirect($"http://localhost:5173/auth/callback?token={token}");
     }
 
-    // --------------------------------------------------------
-    // GERA O TOKEN JWT
-    // --------------------------------------------------------
-    private string GenerateToken(AppUser user)
-    {
-        var jwtSection = _config.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSection["Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    // ---------------------------
+    // JWT
+    // ---------------------------
+   private string CreateJwt(AppUser user)
+{
+    var jwt = _config.GetSection("Jwt");
+    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!));
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new List<Claim>
+    var claims = new List<Claim>
+    {
+        // padrões JWT
+        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.Email, user.Email),
+
+        // padrões .NET
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Name, user.UserName),
+
+        // ✅ o que seu frontend espera
+        new Claim("userName", user.UserName),
+    };
+
+    var token = new JwtSecurityToken(
+        issuer: jwt["Issuer"],
+        audience: jwt["Audience"],
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(8),
+        signingCredentials: creds
+    );
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+
+    private async Task<string> GenerateUniqueUserName(string baseName)
+    {
+        var clean = new string((baseName ?? "user")
+            .Trim()
+            .ToLowerInvariant()
+            .Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '.')
+            .ToArray());
+
+        if (string.IsNullOrWhiteSpace(clean))
+            clean = "user";
+
+        var candidate = clean;
+        var i = 0;
+
+        while (await _db.Users.AnyAsync(u => u.UserName.ToLower() == candidate.ToLower()))
         {
-            new("id", user.Id.ToString()),
-            new("username", user.UserName),
-            new(ClaimTypes.Email, user.Email)
-        };
+            i++;
+            candidate = $"{clean}{i}";
+        }
 
-        var token = new JwtSecurityToken(
-            issuer: jwtSection["Issuer"],
-            audience: jwtSection["Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(8),
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    // ========================================================
-    // DTOs
-    // ========================================================
-
-    public class LoginRequest
-    {
-        public string Email { get; set; } = default!;
-        public string Password { get; set; } = default!;
-    }
-
-    public class RegisterRequest
-    {
-        public string UserName { get; set; } = default!;
-        public string Email { get; set; } = default!;
-        public string Password { get; set; } = default!;
-    }
-
-    public class AuthResponse
-    {
-        public string Token { get; set; } = default!;
-        public int Id { get; set; }
-        public string UserName { get; set; } = default!;
-        public string Email { get; set; } = default!;
+        return candidate;
     }
 }

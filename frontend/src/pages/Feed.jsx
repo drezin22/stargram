@@ -10,8 +10,7 @@ import "../styles/feed.css";
 import { useAuth } from "../auth/AuthContext.jsx"; // depois vamos adaptar esse contexto pro backend
 
 // ideal: configurar em .env => VITE_API_BASE_URL
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5161";
 
 // ✅ Componente principal do Feed
 export default function Feed() {

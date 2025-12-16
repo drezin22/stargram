@@ -1,4 +1,3 @@
-// src/pages/Login.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import "../styles/login.css";
 import { useI18n } from "../i18n";
@@ -10,7 +9,7 @@ export default function Login() {
   const { login, register, logged } = useAuth();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState("login"); // 'login' | 'signup'
+  const [mode, setMode] = useState("login");
   const [emailOrUser, setEmailOrUser] = useState("");
   const [userName, setUserName] = useState("");
   const [senha, setSenha] = useState("");
@@ -18,16 +17,11 @@ export default function Login() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // se já estiver logado, manda pro feed
   useEffect(() => {
     if (logged) navigate("/feed", { replace: true });
   }, [logged, navigate]);
 
-  // telas do mock do celular
-  const imagens = useMemo(
-    () => ["/img/celular2.png", "/img/celular3.png"],
-    []
-  );
+  const imagens = useMemo(() => ["/img/celular2.png", "/img/celular3.png"], []);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -54,19 +48,18 @@ export default function Login() {
         await login({ login: emailOrUser, password: senha });
         navigate("/feed");
       } else {
-        if (senha !== confirmSenha) {
-          throw new Error("As senhas não conferem.");
-        }
+        if (senha !== confirmSenha) throw new Error("As senhas não conferem.");
+
         await register({
           email: emailOrUser,
           userName: userName || emailOrUser.split("@")[0],
           password: senha,
         });
+
         navigate("/feed");
       }
     } catch (err) {
-      console.error(err);
-      setStatus(err.message || "Erro ao autenticar.");
+      setStatus(err?.message || "Erro ao autenticar.");
     } finally {
       setLoading(false);
     }
@@ -83,48 +76,32 @@ export default function Login() {
   return (
     <>
       <main className="content">
-        {/* Mock do celular */}
         <div className="phone" aria-label="Mockup de celular">
           <div className="screen-slot">
             <img
               src={imagens[0]}
               alt="screen 1"
-              className={`screen-img tela1 ${
-                index === 0 ? "is-visible" : "is-hidden"
-              }`}
+              className={`screen-img tela1 ${index === 0 ? "is-visible" : "is-hidden"}`}
               draggable="false"
             />
             <img
               src={imagens[1]}
               alt="screen 2"
-              className={`screen-img tela2 ${
-                index === 1 ? "is-visible" : "is-hidden"
-              }`}
+              className={`screen-img tela2 ${index === 1 ? "is-visible" : "is-hidden"}`}
               draggable="false"
             />
           </div>
         </div>
 
-        {/* Coluna de autenticação */}
         <div className="auth-column">
           <div className="container-formulario">
-            <img
-              src="/img/logo.png"
-              className="logo"
-              alt="Stargram"
-              draggable="false"
-            />
+            <img src="/img/logo.png" className="logo" alt="Stargram" draggable="false" />
 
             <form onSubmit={handleSubmit}>
-              {/* login usa email OR user; cadastro usa email + username */}
               <input
                 value={emailOrUser}
                 onChange={(e) => setEmailOrUser(e.target.value)}
-                placeholder={
-                  mode === "login"
-                    ? t("placeholders_user") // "Telefone, nome de usuário ou e-mail"
-                    : "E-mail"
-                }
+                placeholder={mode === "login" ? t("placeholders_user") : "E-mail"}
                 aria-label="Usuário ou e-mail"
                 disabled={loading}
               />
@@ -170,18 +147,16 @@ export default function Login() {
               </button>
             </form>
 
-            <a
-               className="login-google"
-               href="#"
-               onClick={(e) => {
-               e.preventDefault();
-               window.location.href = "http://localhost:5161/auth/google/login";
+           <a
+  className="login-google"
+  href="#"
+  onClick={(e) => {
+    e.preventDefault();
+    window.location.href = "http://localhost:5161/api/auth/google/login";
   }}
 >
-  {t("login_google")}
+  Entrar com Google
 </a>
-
-
 
             {mode === "login" && (
               <a
@@ -197,20 +172,12 @@ export default function Login() {
             )}
 
             {status && (
-              <div
-                style={{
-                  textAlign: "center",
-                  marginTop: 8,
-                  fontSize: 12,
-                  color: "#c0392b",
-                }}
-              >
+              <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: "#c0392b" }}>
                 {status}
               </div>
             )}
           </div>
 
-          {/* CTA alternável */}
           <div className="cta-signup inline">
             {mode === "login" ? (
               <p>
@@ -231,7 +198,6 @@ export default function Login() {
         </div>
       </main>
 
-      {/* Rodapé (já com i18n + seletor de idioma) */}
       <footer className="site-footer">
         <nav className="footer-links" aria-label="Links do rodapé">
           <a href="#">{t("footer.meta")}</a>
