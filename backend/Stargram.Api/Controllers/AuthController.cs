@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Stargram.Api.Data;
 using Stargram.Api.Models;
+using Stargram.Api.Services;
 
 namespace Stargram.Api.Controllers;
 
@@ -21,12 +22,19 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<AppUser> _hasher;
+    private readonly IEmailService _email;
 
-    public AuthController(IConfiguration config, AppDbContext db, IPasswordHasher<AppUser> hasher)
+    public AuthController(
+        IConfiguration config,
+        AppDbContext db,
+        IPasswordHasher<AppUser> hasher,
+        IEmailService email
+    )
     {
         _config = config;
         _db = db;
         _hasher = hasher;
+        _email = email;
     }
 
     // ---------------------------
@@ -48,6 +56,17 @@ public class AuthController : ControllerBase
     public sealed class AuthResponse
     {
         public string Token { get; set; } = "";
+    }
+
+    public sealed class ForgotPasswordRequest
+    {
+        public string Email { get; set; } = "";
+    }
+
+    public sealed class ResetPasswordRequest
+    {
+        public string Token { get; set; } = "";
+        public string NewPassword { get; set; } = "";
     }
 
     // ---------------------------
@@ -106,16 +125,14 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password))
             return BadRequest("Informe login e senha.");
 
-        // aceita email OU username
         var user = await _db.Users.FirstOrDefaultAsync(u =>
             u.Email.ToLower() == login.ToLower() || u.UserName.ToLower() == login.ToLower());
 
         if (user == null)
             return Unauthorized("Usuário ou senha inválidos.");
 
-        // Se foi criado via Google e não tem senha
         if (string.IsNullOrWhiteSpace(user.PasswordHash))
-            return Unauthorized("Essa conta foi criada via Google. Entre com Google ou defina uma senha.");
+            return Unauthorized("Essa conta foi criada via Google. Entre com Google ou redefina uma senha.");
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (verify == PasswordVerificationResult.Failed)
@@ -126,13 +143,93 @@ public class AuthController : ControllerBase
     }
 
     // ---------------------------
+    // FORGOT PASSWORD (ENVIA EMAIL)
+    // ---------------------------
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req)
+    {
+        var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@"))
+            return Ok();
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+        if (user == null) return Ok(); // não revela existência
+
+        // invalida tokens antigos ainda válidos
+        var old = await _db.PasswordResetTokens
+            .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+
+        foreach (var t in old) t.Used = true;
+
+        // gera token novo
+        var token = Guid.NewGuid().ToString("N");
+        var expiresIn = TimeSpan.FromHours(1);
+        var expiresAt = DateTime.UtcNow.Add(expiresIn);
+
+        _db.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            UserId = user.Id,
+            Token = token,
+            ExpiresAt = expiresAt,
+            Used = false
+        });
+
+        await _db.SaveChangesAsync();
+
+        // link pro front (com fallback)
+        var frontend =
+            _config["FrontendUrl"]
+            ?? _config["Frontend:BaseUrl"]
+            ?? "http://localhost:5173";
+
+        var resetUrl = $"{frontend.TrimEnd('/')}/reset-password?token={token}";
+
+        // ✅ envia usando o template HTML
+        await _email.SendResetPasswordAsync(user.Email, resetUrl, expiresIn);
+
+        return Ok();
+    }
+
+    // ---------------------------
+    // RESET PASSWORD
+    // ---------------------------
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req)
+    {
+        var token = (req.Token ?? "").Trim();
+        var newPass = req.NewPassword ?? "";
+
+        if (string.IsNullOrWhiteSpace(token))
+            return BadRequest("Token inválido.");
+
+        if (string.IsNullOrWhiteSpace(newPass) || newPass.Length < 6)
+            return BadRequest("A senha deve ter pelo menos 6 caracteres.");
+
+        var tokenEntity = await _db.PasswordResetTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Token == token && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+        if (tokenEntity?.User == null)
+            return BadRequest("Token inválido ou expirado.");
+
+        var user = tokenEntity.User;
+        user.PasswordHash = _hasher.HashPassword(user, newPass);
+        tokenEntity.Used = true;
+
+        await _db.SaveChangesAsync();
+        return Ok();
+    }
+
+    // ---------------------------
     // GOOGLE LOGIN
     // ---------------------------
     [HttpGet("google/login")]
     [AllowAnonymous]
     public IActionResult GoogleLogin()
     {
-        // controller callback final
         var redirectUrl = Url.Action(nameof(GoogleCallback), "Auth", null, Request.Scheme);
 
         var props = new AuthenticationProperties
@@ -150,8 +247,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GoogleCallback()
     {
-        var result = await HttpContext.AuthenticateAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme);
+        var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
         if (!result.Succeeded || result.Principal == null)
             return Redirect("http://localhost:5173/login");
@@ -167,7 +263,6 @@ public class AuthController : ControllerBase
         if (string.IsNullOrWhiteSpace(email))
             return Redirect("http://localhost:5173/login");
 
-        // cria ou pega usuário no banco
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
         if (user == null)
@@ -179,7 +274,7 @@ public class AuthController : ControllerBase
             {
                 Email = email,
                 UserName = uniqueUserName,
-                PasswordHash = null, // conta google
+                PasswordHash = null,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -189,7 +284,6 @@ public class AuthController : ControllerBase
 
         var token = CreateJwt(user);
 
-        // limpa cookie externo
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
         return Redirect($"http://localhost:5173/auth/callback?token={token}");
@@ -198,38 +292,34 @@ public class AuthController : ControllerBase
     // ---------------------------
     // JWT
     // ---------------------------
-   private string CreateJwt(AppUser user)
-{
-    var jwt = _config.GetSection("Jwt");
-    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-    var claims = new List<Claim>
+    private string CreateJwt(AppUser user)
     {
-        // padrões JWT
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email),
+        var jwt = _config.GetSection("Jwt");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        // padrões .NET
-        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new Claim(ClaimTypes.Email, user.Email),
-        new Claim(ClaimTypes.Name, user.UserName),
+        var claims = new List<Claim>
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
 
-        // ✅ o que seu frontend espera
-        new Claim("userName", user.UserName),
-    };
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.UserName),
 
-    var token = new JwtSecurityToken(
-        issuer: jwt["Issuer"],
-        audience: jwt["Audience"],
-        claims: claims,
-        expires: DateTime.UtcNow.AddHours(8),
-        signingCredentials: creds
-    );
+            new Claim("userName", user.UserName),
+        };
 
-    return new JwtSecurityTokenHandler().WriteToken(token);
-}
+        var token = new JwtSecurityToken(
+            issuer: jwt["Issuer"],
+            audience: jwt["Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(8),
+            signingCredentials: creds
+        );
 
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
 
     private async Task<string> GenerateUniqueUserName(string baseName)
     {

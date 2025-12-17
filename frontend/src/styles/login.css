@@ -1,8 +1,11 @@
-/* frontend/styles/login.css */
-/* RESET */
+/* =========================================================
+   LOGIN – Stargram (ESCOPADO: nada vaza pro Forgot)
+   ========================================================= */
+
+/* RESET BÁSICO */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* LAYOUT BASE */
+/* BODY do login (como é SPA, mantemos estilo geral aqui) */
 body {
   background: url("/img/background.png") no-repeat center center fixed;
   background-size: cover;
@@ -12,8 +15,8 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
-/* Área central */
-.content {
+/* Área central (apenas login) */
+.login-page {
   flex: 1;
   display: flex;
   align-items: center;
@@ -24,36 +27,29 @@ body {
 
 /* =========================================================
    MOLDURA DO CELULAR + SLOT DA TELA (pixel-perfect)
-   Se trocar a imagem /img/celular.png, ajuste só estas variáveis.
    ========================================================= */
 :root{
-  /* Tamanho do PNG da moldura (não é a tela!) */
   --phone-width: 450px;
   --phone-height: 590px;
 
-  /* Posição e tamanho do "recorte" de tela dentro da moldura */
   --slot-left: 18px;
   --slot-top: 0px;
   --slot-width: calc(var(--phone-width) - 36px);
   --slot-height: var(--phone-height);
-
-  /* Raio do recorte (acompanhar cantos arredondados da moldura) */
   --slot-radius: 20px;
 
-  /* Duração do cross-fade */
-  --fade-in-ms: 1700;   /* entra levemente mais rápido */
-  --fade-out-ms: 2000;  /* sai um pouco mais devagar */
-  --stagger-ms: 120;    /* atraso mínimo na saída p/ sobrepor melhor */
+  --fade-in-ms: 1700;
+  --fade-out-ms: 2000;
+  --stagger-ms: 120;
 }
 
-.phone{
+.login-phone{
   position: relative;
   width: var(--phone-width);
   height: var(--phone-height);
 }
 
-/* Slot onde as imagens de tela ficam renderizadas */
-.screen-slot{
+.login-screen-slot{
   position: absolute;
   left: var(--slot-left);
   top: var(--slot-top);
@@ -61,104 +57,85 @@ body {
   height: var(--slot-height);
   overflow: hidden;
   border-radius: var(--slot-radius);
-  transform: translateZ(0); /* evita “subpixel jitter” */
+  transform: translateZ(0);
 }
 
-/* Imagens de tela (duas camadas em cross-fade) */
-.screen-img{
+.login-screen-img{
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
-
-  /* base: começa escondida, visível só quando ganhar a classe */
   opacity: 0;
 
   will-change: opacity, transform, filter;
   backface-visibility: hidden;
   pointer-events: none;
 
-  /* transições padrão (serão refinadas nos estados abaixo) */
   transition:
     opacity var(--fade-out-ms)ms cubic-bezier(.2,.7,0,.9),
     transform var(--fade-out-ms)ms ease-out,
     filter var(--fade-out-ms)ms ease-out;
 
-  /* microajustes por screenshot (você já usa) */
   transform:
     translate(var(--img-offset-x, 0px), var(--img-offset-y, 0px))
     scale(var(--img-scale, 1));
 }
 
-/* ENTRANDO: aparece e ganha leve “vida” (Ken Burns sutil) */
-.screen-img.is-visible {
+.login-screen-img.is-visible{
   z-index: 2;
   opacity: 1;
   transition-duration: var(--fade-in-ms);
-  transition-delay: 0ms;              /* entra já */
+  transition-delay: 0ms;
   transform:
     translate(var(--img-offset-x, 0px), var(--img-offset-y, 0px))
     scale(calc(var(--img-scale, 1) * 1.012));
   filter: none;
 }
 
-/* SAINDO: some devagar, começa um tiquinho depois (sobreposição real) */
-.screen-img.is-hidden  {
+.login-screen-img.is-hidden{
   z-index: 1;
   opacity: 0;
   transition-duration: var(--fade-out-ms);
-  transition-delay: var(--stagger-ms); /* 120ms de atraso na saída */
+  transition-delay: var(--stagger-ms);
   transform:
     translate(calc(var(--img-offset-x, 0px) - 0.5px), calc(var(--img-offset-y, 0px) + 0.5px))
     scale(var(--img-scale, 1));
-  filter: blur(0.4px); /* sutil, pode pôr 0 se não quiser */
+  filter: blur(0.4px);
 }
 
+.tela1{ --img-offset-x: 0px; --img-offset-y: 0px; --img-scale: 1; }
+.tela2{ --img-offset-x: 0px; --img-offset-y: 0px; --img-scale: 1; }
 
-/* ------------------ Ajustes por screenshot ------------------
-   Se /img/celular2.png e /img/celular3.png tiverem canvas diferentes,
-   ajuste aqui SEM mexer no slot (valores pequenos já resolvem). */
-.tela1{
-  --img-offset-x: 0px;
-  --img-offset-y: 0px;
-  --img-scale: 1;
-}
-.tela2{
-  --img-offset-x: 0px; /* experimente -8px, -6px, -4px... até “bater” */
-  --img-offset-y: 0px;
-  --img-scale: 1;
+/* Coluna */
+.login-auth-column{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-/* ---------- DEV: modo visual de debug do slot ----------
-   Para usar, adicione a classe 'debug' em <div class="phone debug"> */
-.phone.debug .screen-slot::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: var(--slot-radius);
-  outline: 2px dashed rgba(255, 0, 128, .7);
-  outline-offset: -2px;
-  pointer-events: none;
-}
-
-/* Alinhamento da coluna do formulário */
-.auth-column{ display: flex; flex-direction: column; align-items: center; }
-
-/* CARD LOGIN */
-.container-formulario {
+/* Card */
+.login-card{
   background: #fafafa;
   display: flex;
   flex-direction: column;
   border: 1px solid #dbdbdb;
-  padding: 24px 40px 18px;  /* proporção bem parecida com Insta */
+  padding: 24px 40px 18px;
   border-radius: 5px;
   width: 350px;
 }
-.logo { margin-bottom: 20px; }
 
-input {
+/* LOGO (aqui você controla o tamanho do login) */
+.login-logo{
+  width: 250px;     
+  height: auto;
+  display: block;
+  margin: 0 auto 22px;
+}
+
+/* Inputs e botões só do login */
+.login-card input{
   width: 100%;
   height: 36px;
   outline: none;
@@ -171,11 +148,9 @@ input {
   background: #fafafa;
 }
 
-input::placeholder {
-  color: #8e8e8e;
-}
+.login-card input::placeholder{ color: #8e8e8e; }
 
-button {
+.login-card button{
   width: 100%;
   background: #385185;
   height: 40px;
@@ -188,44 +163,67 @@ button {
   font-size: 14px;
 }
 
-button:disabled {
+.login-card button:disabled{
   opacity: .7;
   cursor: not-allowed;
 }
 
-/* "Entrar com Google" – estilo similar ao "Entrar com Facebook" do Insta */
-.login-google {
+/* Botão Google */
+.login-btn-google{
+  width: 100%;
+  height: 40px;
+  margin-top: 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  background: #fff;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+
   color: #385185;
-  font-weight: 700;
-  text-align: center;
-  margin: 18px 0 8px;
-  cursor: pointer;
+  font-weight: 600;
   font-size: 14px;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.login-btn-google:hover{ background: #f6f6f6; }
+.login-btn-google:active{ transform: translateY(1px); }
+
+.login-google-icon{
+  width: 49px;
+  height: 49px;
+  object-fit: contain;
   display: block;
+  margin-bottom: -3px;
+  margin-left: -3px;
 }
 
-.login-google:hover {
-  text-decoration: underline;
-}
-
-/* Esqueceu a senha */
-.esqueceu-senha {
+/* Esqueceu */
+.login-forgot{
   color: #00376b;
   text-align: center;
   cursor: pointer;
   font-size: 12px;
   text-decoration: none;
-  margin-bottom: 4px;
+  margin-top: 10px;
   display: block;
 }
+.login-forgot:hover{ text-decoration: underline; }
 
-.esqueceu-senha:hover {
-  text-decoration: underline;
+/* Status */
+.login-status{
+  text-align: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #c0392b;
 }
 
-/* CTA "Cadastre-se" (fora do card) */
-.cta-signup.inline {
+/* CTA */
+.login-cta{
   width: 350px;
   margin: 12px auto 0;
   background: rgba(255, 255, 255, 0.08);
@@ -236,26 +234,21 @@ button:disabled {
   place-items: center;
   backdrop-filter: blur(4px);
 }
-
-.cta-signup p {
+.login-cta p{
   color: #fff;
   font-weight: 500;
   font-size: 14px;
   margin: 0;
 }
-
-.cta-signup a {
+.login-cta a{
   color: #ffd6e2;
   text-decoration: none;
   font-weight: 700;
 }
+.login-cta a:hover{ text-decoration: underline; }
 
-.cta-signup a:hover {
-  text-decoration: underline;
-}
-
-/* ---------- RODAPÉ ---------- */
-.site-footer {
+/* Rodapé */
+.login-footer{
   max-width: 980px;
   width: 100%;
   margin: 8px auto 24px;
@@ -263,7 +256,7 @@ button:disabled {
   opacity: 0.95;
 }
 
-.footer-links {
+.login-footer-links{
   display: flex;
   flex-wrap: wrap;
   gap: 10px 16px;
@@ -272,59 +265,45 @@ button:disabled {
   margin-bottom: 12px;
 }
 
-.footer-links a {
+.login-footer-links a{
   color: #f0f0f0;
   text-decoration: none;
   font-size: 12px;
   opacity: 0.9;
 }
+.login-footer-links a:hover{ text-decoration: underline; }
 
-.footer-links a:hover {
-  text-decoration: underline;
-}
-
-.footer-meta {
+.login-footer-meta{
   display: flex;
   gap: 16px;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
 }
-
-.footer-meta .copy {
+.login-copy{
   font-size: 12px;
   opacity: 0.85;
 }
 
-/* ---------- RESPONSIVO ---------- */
-@media (max-width: 960px) {
-  .content {
-    gap: 32px;
-  }
+/* Responsivo */
+@media (max-width: 960px){
+  .login-page{ gap: 32px; }
 
-  :root {
+  :root{
     --phone-width: 360px;
     --phone-height: 472px;
     --slot-left: 14px;
-    --slot-top: 0px;
     --slot-width: calc(var(--phone-width) - 28px);
     --slot-height: var(--phone-height);
     --slot-radius: 16px;
   }
 }
 
-@media (max-width: 720px) {
-  .content {
+@media (max-width: 720px){
+  .login-page{
     flex-direction: column;
     gap: 24px;
   }
-
-  /* Igual Insta: some com mock do celular no mobile */
-  .phone {
-    display: none;
-  }
-
-  .site-footer {
-    margin: 8px 16px 20px;
-  }
+  .login-phone{ display: none; }
+  .login-footer{ margin: 8px 16px 20px; }
 }

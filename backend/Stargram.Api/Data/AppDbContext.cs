@@ -10,6 +10,9 @@ namespace Stargram.Api.Data
 
         public DbSet<AppUser> Users => Set<AppUser>();
 
+        // 🔹 NOVO DbSet
+        public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -18,6 +21,17 @@ namespace Stargram.Api.Data
             {
                 e.HasIndex(u => u.Email).IsUnique();
                 e.HasIndex(u => u.UserName).IsUnique();
+            });
+
+            // 🔹 Relacionamento PasswordResetToken → AppUser
+            modelBuilder.Entity<PasswordResetToken>(e =>
+            {
+                e.HasOne(t => t.User)
+                 .WithMany() // AppUser não precisa de coleção agora
+                 .HasForeignKey(t => t.UserId)
+                 .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasIndex(t => t.Token).IsUnique();
             });
         }
     }

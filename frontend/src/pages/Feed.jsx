@@ -7,25 +7,30 @@ import React, {
   useState,
 } from "react";
 import "../styles/feed.css";
-import { useAuth } from "../auth/AuthContext.jsx"; // depois vamos adaptar esse contexto pro backend
+import { useAuth } from "../auth/AuthContext.jsx";
+import { useNavigate } from "react-router-dom"; // ✅ NOVO
 
-// ideal: configurar em .env => VITE_API_BASE_URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5161";
 
-// ✅ Componente principal do Feed
 export default function Feed() {
-  const { user, logout } = useAuth(); // user vindo da autenticação (.NET depois)
+  const { user, logout } = useAuth();
+  const navigate = useNavigate(); // ✅ NOVO
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // aplica o fundo exclusivo do feed no <body>
+  // ✅ Logout de verdade: limpa token + volta pro login
+  function handleLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   useEffect(() => {
     document.body.classList.add("feed-bg");
     return () => document.body.classList.remove("feed-bg");
   }, []);
 
-  // ajusta dinamicamente a altura da topbar → stories sempre visíveis
   useLayoutEffect(() => {
     const el = document.querySelector(".llm-topbar");
     if (!el) return;
@@ -48,7 +53,6 @@ export default function Feed() {
     };
   }, []);
 
-  // 🚀 carrega posts da API .NET
   useEffect(() => {
     async function loadPosts() {
       try {
@@ -61,7 +65,6 @@ export default function Feed() {
         }
 
         const data = await res.json();
-        // esperamos algo como: [{ id, userName, userAvatarUrl, caption, imageUrl, createdAt, likesCount, isLikedByCurrentUser }]
         setPosts(data);
       } catch (err) {
         console.error(err);
@@ -75,27 +78,24 @@ export default function Feed() {
     loadPosts();
   }, []);
 
-  // atualiza um post específico na lista (quando curtimos, comentamos, etc.)
   function handlePostUpdated(updated) {
     setPosts((prev) =>
       prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
     );
   }
 
-  // adiciona post recém-criado (quando o backend devolver o objeto salvo)
   function handlePostCreated(created) {
     setPosts((prev) => [created, ...prev]);
   }
 
   return (
     <div className="llm-wrap">
-      <TopBar onLogout={logout} user={user} />
+      {/* ✅ agora passa handleLogout */}
+      <TopBar onLogout={handleLogout} user={user} />
 
       <main className="llm-main">
-        {/* ⬅️ Left nav */}
         <LeftNav />
 
-        {/* 🏠 coluna central */}
         <section className="llm-col">
           <StoriesCarousel user={user} />
           <Composer user={user} onPostCreated={handlePostCreated} />
@@ -124,7 +124,6 @@ export default function Feed() {
           )}
         </section>
 
-        {/* ➡️ aside direito */}
         <aside className="llm-aside">
           <ProfileCard user={user} />
           <Suggestions />
@@ -141,7 +140,7 @@ function TopBar({ onLogout, user }) {
     <header className="llm-topbar">
       <div className="llm-topbar__inner">
         <div className="llm-logo">
-          <img src="/img/logo.png" alt="Stargram" className="llm-logo-img" />
+          <img src="/img/logo2.png" alt="Stargram" className="llm-logo-img" />
         </div>
 
         <div className="llm-actions">
@@ -149,11 +148,12 @@ function TopBar({ onLogout, user }) {
             <input placeholder="Pesquisar" aria-label="Pesquisar" />
           </div>
 
+          {/* ✅ agora sempre desloga + navega */}
           <button className="logout-btn" title="Sair" onClick={onLogout}>
             Sair
           </button>
 
-             <Avatar
+          <Avatar
             src={user?.avatarUrl}
             title={user?.userName || user?.email}
             variant="sm"
@@ -205,12 +205,12 @@ function LeftNav() {
 /* ===================== Stories: carrossel c/ setas ===================== */
 function StoriesCarousel({ user }) {
   const people = useMemo(() => {
-  const base = [
-    {
-      id: "me",
-      name: user?.userName || user?.email?.split("@")[0] || "Você",
-      img: user?.avatarUrl,
-    },
+    const base = [
+      {
+        id: "me",
+        name: user?.userName || user?.email?.split("@")[0] || "Você",
+        img: user?.avatarUrl,
+      },
       { id: 1, name: "fernanda.dev", img: `https://i.pravatar.cc/150?img=1` },
       { id: 2, name: "techshop", img: `https://i.pravatar.cc/150?img=2` },
       { id: 3, name: "fiap.on", img: `https://i.pravatar.cc/150?img=3` },
@@ -250,8 +250,8 @@ function StoriesCarousel({ user }) {
     };
   }, []);
 
-  const STEP = 5; // quantos “cards” por clique
-  const CARD_W = 88; // largura aproximada do story (px) — casa com o CSS
+  const STEP = 5;
+  const CARD_W = 88;
 
   function go(dir) {
     const el = trackRef.current;
@@ -296,8 +296,7 @@ function StoriesCarousel({ user }) {
   );
 }
 
-/* ===================== Composer (criar post) ===================== */
-/* ===================== Composer (criar post) ===================== */
+/* ===================== Composer ===================== */
 function Composer({ user, onPostCreated }) {
   const [caption, setCaption] = useState("");
   const [file, setFile] = useState(null);
@@ -323,7 +322,7 @@ function Composer({ user, onPostCreated }) {
       if (file) {
         const form = new FormData();
         form.append("caption", caption.trim());
-        form.append("userId", user.id);     // 👈 usa o id do backend
+        form.append("userId", user.id);
         form.append("file", file);
 
         const res = await fetch(`${API_BASE_URL}/api/posts`, {
@@ -338,7 +337,7 @@ function Composer({ user, onPostCreated }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             caption: caption.trim(),
-            userId: user.id,               // 👈 idem aqui
+            userId: user.id,
           }),
         });
         if (!res.ok) throw new Error("Erro ao publicar o post.");
@@ -359,7 +358,6 @@ function Composer({ user, onPostCreated }) {
 
   return (
     <form className="composer" onSubmit={handlePublish}>
-      {/* 👇 avatar do usuário vindo do backend */}
       <Avatar src={user?.avatarUrl} variant="sm" />
 
       <input
@@ -388,7 +386,6 @@ function Composer({ user, onPostCreated }) {
   );
 }
 
-
 /* ===================== Post ===================== */
 function PostCard({ post, user, onPostUpdated }) {
   const [liking, setLiking] = useState(false);
@@ -396,12 +393,10 @@ function PostCard({ post, user, onPostUpdated }) {
   const likeCount =
     post.likesCount ?? post.likedBy?.length ?? post.likeCount ?? 0;
 
-const isLiked =
-  post.isLikedByCurrentUser ??
-  post.likedBy?.includes(user?.id) ??
-  false;
-
-
+  const isLiked =
+    post.isLikedByCurrentUser ??
+    post.likedBy?.includes(user?.id) ??
+    false;
 
   async function toggleLike() {
     if (!user) return;
@@ -410,10 +405,7 @@ const isLiked =
       const res = await fetch(`${API_BASE_URL}/api/posts/${post.id}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-  userId: user.id,
-}),
-
+        body: JSON.stringify({ userId: user.id }),
       });
       if (!res.ok) throw new Error("Erro ao curtir o post.");
       const updated = await res.json();
@@ -483,7 +475,6 @@ const isLiked =
           </p>
         )}
 
-        {/* Comentários simplificados – backend depois */}
         <button
           className="muted link"
           onClick={() => alert("Comentários completos em breve 🙂")}
@@ -506,7 +497,6 @@ function Media({ url, alt }) {
   );
 }
 
-/* ========== CommentComposer – manda para API, mas não recarrega lista ainda ========== */
 function CommentComposer({ postId, user }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -519,14 +509,12 @@ function CommentComposer({ postId, user }) {
       const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-               body: JSON.stringify({
+        body: JSON.stringify({
           text: text.trim(),
-          userId: user?.id,   // ✅ agora usa o id do usuário do backend
+          userId: user?.id,
         }),
-
       });
       if (!res.ok) throw new Error("Erro ao enviar comentário.");
-      // opcional: const created = await res.json();
       setText("");
     } catch (e) {
       console.error(e);
@@ -561,27 +549,32 @@ function CommentsButton() {
 
 /* ===================== Side ===================== */
 function ProfileCard({ user }) {
+  const navigate = useNavigate();
   const name = user?.userName || user?.email?.split("@")[0] || "Você";
+
+  function goToProfile() {
+    navigate("/perfil");
+  }
 
   return (
     <div className="card profile">
       <div className="row">
-        <Avatar src={user?.avatarUrl} title={name} variant="md" />
+        <button
+          onClick={goToProfile}
+          className="avatar-btn"
+          title="Ir para o perfil"
+        >
+          <Avatar src={user?.avatarUrl} title={name} variant="md" />
+        </button>
+
         <div>
           <b>{name}</b>
           <div className="muted">{user?.email}</div>
         </div>
       </div>
-      <button
-        className="btn btn-edit"
-        onClick={() => alert("Editar perfil em breve")}
-      >
-        Editar perfil
-      </button>
     </div>
   );
 }
-
 
 function Suggestions() {
   const list = [
@@ -593,10 +586,7 @@ function Suggestions() {
     <div className="card">
       <div className="row between">
         <b>Sugestões para você</b>
-        <button
-          className="link muted"
-          onClick={() => alert("Ver todas em breve")}
-        >
+        <button className="link muted" onClick={() => alert("Ver todas em breve")}>
           Ver tudo
         </button>
       </div>
@@ -620,9 +610,7 @@ function FooterLinks() {
   return (
     <div className="footer-links">
       <span>Sobre • Ajuda • API • Privacidade • Termos • Localizações</span>
-      <small className="muted">
-        © {new Date().getFullYear()} Stargram
-      </small>
+      <small className="muted">© {new Date().getFullYear()} Stargram</small>
     </div>
   );
 }
@@ -669,9 +657,7 @@ function PostSkeleton() {
 }
 
 function fallbackAvatar(seed = "user") {
-  return `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(
-    seed
-  )}`;
+  return `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(seed)}`;
 }
 
 function formatDate(ts) {
@@ -693,9 +679,7 @@ function formatDate(ts) {
     if (hrs < 24) return `${hrs} h`;
     const days = Math.floor(hrs / 24);
     if (days < 7) return `${days} d`;
-    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(
-      date
-    );
+    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(date);
   } catch {
     return "agora";
   }

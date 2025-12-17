@@ -75,27 +75,32 @@ export default function Login() {
 
   return (
     <>
-      <main className="content">
-        <div className="phone" aria-label="Mockup de celular">
-          <div className="screen-slot">
+      <main className="login-page">
+        <div className="login-phone" aria-label="Mockup de celular">
+          <div className="login-screen-slot">
             <img
               src={imagens[0]}
               alt="screen 1"
-              className={`screen-img tela1 ${index === 0 ? "is-visible" : "is-hidden"}`}
+              className={`login-screen-img tela1 ${index === 0 ? "is-visible" : "is-hidden"}`}
               draggable="false"
             />
             <img
               src={imagens[1]}
               alt="screen 2"
-              className={`screen-img tela2 ${index === 1 ? "is-visible" : "is-hidden"}`}
+              className={`login-screen-img tela2 ${index === 1 ? "is-visible" : "is-hidden"}`}
               draggable="false"
             />
           </div>
         </div>
 
-        <div className="auth-column">
-          <div className="container-formulario">
-            <img src="/img/logo.png" className="logo" alt="Stargram" draggable="false" />
+        <div className="login-auth-column">
+          <div className="login-card">
+            <img
+              src="/img/logo.png"
+              className="login-logo"
+              alt="Stargram"
+              draggable="false"
+            />
 
             <form onSubmit={handleSubmit}>
               <input
@@ -147,38 +152,40 @@ export default function Login() {
               </button>
             </form>
 
-           <a
-  className="login-google"
-  href="#"
-  onClick={(e) => {
-    e.preventDefault();
-    window.location.href = "http://localhost:5161/api/auth/google/login";
-  }}
->
-  Entrar com Google
-</a>
+            <a
+              className="login-btn-google"
+              href="http://localhost:5161/api/auth/google/login"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = "http://localhost:5161/api/auth/google/login";
+              }}
+            >
+              <span>Entrar com</span>
+              <img
+                className="login-google-icon"
+                src="/img/logo-google.png"
+                alt="Google"
+                aria-hidden="true"
+              />
+            </a>
 
             {mode === "login" && (
               <a
-                className="esqueceu-senha"
+                className="login-forgot"
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("Fluxo de recuperação de senha em breve.");
+                  navigate("/forgot-password");
                 }}
               >
-                {t("forgot")}?
+                {t("forgot")}
               </a>
             )}
 
-            {status && (
-              <div style={{ textAlign: "center", marginTop: 8, fontSize: 12, color: "#c0392b" }}>
-                {status}
-              </div>
-            )}
+            {status && <div className="login-status">{status}</div>}
           </div>
 
-          <div className="cta-signup inline">
+          <div className="login-cta">
             {mode === "login" ? (
               <p>
                 {t("cta_question")}{" "}
@@ -198,8 +205,8 @@ export default function Login() {
         </div>
       </main>
 
-      <footer className="site-footer">
-        <nav className="footer-links" aria-label="Links do rodapé">
+      <footer className="login-footer">
+        <nav className="login-footer-links" aria-label="Links do rodapé">
           <a href="#">{t("footer.meta")}</a>
           <a href="#">{t("footer.about")}</a>
           <a href="#">{t("footer.blog")}</a>
@@ -217,8 +224,8 @@ export default function Login() {
           <a href="#">{t("footer.verified")}</a>
         </nav>
 
-        <div className="footer-meta">
-          <label className="lang">
+        <div className="login-footer-meta">
+          <label className="login-lang">
             <select
               aria-label="Selecionar idioma"
               value={lang}
@@ -233,7 +240,7 @@ export default function Login() {
               <option value="it">Italiano</option>
             </select>
           </label>
-          <span className="copy">{t("footer.copy")}</span>
+          <span className="login-copy">{t("footer.copy")}</span>
         </div>
       </footer>
     </>

@@ -1,10 +1,10 @@
 :root{
   --bg:#0b0b12;
-  --card:#d6bebe;
+  --card:#0b0b12bd;
   --muted:#a4a5b8;
   --text:#fff;
-  --line:#BB2649;
-  --primary:#BB2649;
+  --line:#385185;
+  --primary:#385185;
 
   /* Controles */
   --control-h: 40px;
@@ -59,7 +59,7 @@ body.feed-bg{
   display:flex; align-items:center; justify-content:space-between;
   padding:10px 16px;
 }
-.llm-logo-img{height:35px; display:block; margin-top:5px}
+.llm-logo-img{height:50px; display:block; margin-top:5px}
 
 /* Ações do topo */
 .llm-actions{display:flex; align-items:center; gap:12px}
@@ -71,7 +71,7 @@ body.feed-bg{
   padding:0 12px;
   width:240px;
   background:#fff;
-  color:#BB2649;
+  color:#385185;
   border:1px solid var(--primary);
   border-radius:calc(var(--control-h)/2);
   display:block; margin:0;
@@ -88,7 +88,7 @@ body.feed-bg{
   font-size:var(--btn-font-size); font-weight:var(--btn-font-weight);
   cursor:pointer; transition:background .2s, transform .02s;
 }
-.logout-btn:hover{ background:#a01f3e }
+.logout-btn:hover{ background:#385185 }
 .logout-btn:active{ transform:translateY(1px) }
 
 /* =================== LAYOUT PRINCIPAL =================== */
@@ -156,9 +156,9 @@ body.feed-bg{
 .btn-attach{ background:#26212f; color:#fff; border-color:#3a3742 }
 .btn-attach:hover{ background:#2f2a3a }
 .btn-publish{ background:var(--primary); color:#fff; border-color:var(--primary) }
-.btn-publish:hover{ background:#a01f3e }
-.btn-edit{ background:#fff; color:#BB2649; border-color:#ffd6e2; margin-left:90px }
-.btn-follow{ background:#fff; color:#BB2649; border-color:#ffd6e2 }
+.btn-publish:hover{ background:#385185 }
+.btn-edit{ background:#385185; color:#fff; border-color:#ffd6e2; margin-left:0px }
+.btn-follow{ background:#385185; color:#fff; border-color:#ffd6e2 }
 .btn-edit:hover,.btn-follow:hover{ background:#ffe6ee }
 
 .link{ background:none; border:none; color:#7fb7ff; cursor:pointer; font-weight:600 }
@@ -217,12 +217,10 @@ body.feed-bg{
 .stories-arrow.right{ right:10px }
 
 /* fades (efeito visual nas bordas) */
+/* Remove o esbranquiçado do carrossel de stories */
 .stories-fade{
-  position:absolute; top:0; bottom:0; width:44px; pointer-events:none; z-index:2;
+  display: none;
 }
-.stories-fade.left{ left:56px;  background:linear-gradient(90deg, var(--card) 0%, transparent 100%) }
-.stories-fade.right{ right:56px; background:linear-gradient(270deg, var(--card) 0%, transparent 100%) }
-
 /* =============== COMPOSER =============== */
 .composer{
   display:flex; align-items:center; gap:10px;
@@ -263,3 +261,32 @@ body.feed-bg{
 .skel .s-line{height:12px;background:#1a1a29;border-radius:8px;margin:6px 0}
 .skel .s-line.short{width:40%}
 .skel .s-media{width:100%;aspect-ratio:1/1;background:#121225}
+
+.card.profile .avatar{
+  border: none;
+}
+
+/* PROFILE: o avatar agora está dentro de um <button> */
+.card.profile .avatar-btn{
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  overflow: hidden;          /* garante que nada quadrado apareça */
+  line-height: 0;            /* evita “caixa” extra do botão */
+  display: inline-flex;
+}
+
+/* remove qualquer foco padrão (aquela borda quadrada) */
+.card.profile .avatar-btn:focus,
+.card.profile .avatar-btn:focus-visible{
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* já mantém o avatar sem borda */
+.card.profile .avatar{
+  border: none !important;
+}

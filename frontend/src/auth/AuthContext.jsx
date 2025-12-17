@@ -22,8 +22,6 @@ function parseJwt(token) {
 function buildUserFromClaims(claims) {
   if (!claims) return null;
 
-  // Esses nomes podem variar conforme seu backend gera o JWT.
-  // Coloque vários “fallbacks” para funcionar em qualquer caso.
   const id =
     claims.sub ||
     claims.nameid ||
@@ -43,7 +41,7 @@ function buildUserFromClaims(claims) {
   const avatarUrl = claims.avatarUrl || claims.picture || null;
 
   return {
-    id: id ? Number(id) : id, // se vier string numérica, converte
+    id: id ? Number(id) : id,
     userName,
     email,
     avatarUrl,
@@ -56,12 +54,13 @@ export function AuthProvider({ children }) {
 
   const logged = !!token;
 
+  // persiste token
   useEffect(() => {
     if (token) localStorage.setItem("stargram_token", token);
     else localStorage.removeItem("stargram_token");
   }, [token]);
 
-  // ✅ toda vez que token mudar, monta o user
+  // monta user a partir do token
   useEffect(() => {
     if (!token) {
       setUser(null);
@@ -84,7 +83,7 @@ export function AuthProvider({ children }) {
       throw new Error(msg || "Erro ao autenticar.");
     }
 
-    const data = await res.json(); // { token: "..." }
+    const data = await res.json();
     setToken(data.token);
     return data;
   }
@@ -101,7 +100,7 @@ export function AuthProvider({ children }) {
       throw new Error(msg || "Erro ao cadastrar.");
     }
 
-    const data = await res.json(); // { token: "..." }
+    const data = await res.json();
     if (data?.token) setToken(data.token);
     return data;
   }
@@ -114,6 +113,7 @@ export function AuthProvider({ children }) {
   function logout() {
     setToken("");
     setUser(null);
+    localStorage.removeItem("stargram_token"); // ✅ garante limpeza
   }
 
   const value = useMemo(
